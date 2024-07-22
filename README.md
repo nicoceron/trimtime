@@ -1,4 +1,3 @@
-```markdown
 # 📅 TrimTime
 
 TrimTime is an Android application designed to help you manage and schedule appointments efficiently. It features the ability to register appointments with specific details and search for appointments on specific dates.
