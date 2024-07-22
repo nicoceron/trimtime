@@ -14,7 +14,7 @@ To get started with TrimTime, follow these steps:
 
 1. **Clone the repository:**
     ```sh
-    git clone https://github.com/yourusername/trimtime.git
+    git clone https://github.com/nicoceron/trimtime.git
     ```
 
 2. **Open the project in Android Studio:**
