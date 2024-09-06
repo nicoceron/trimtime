@@ -12,14 +12,13 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.example.trimtime.databinding.ActivitySearchAppointmentBinding
 import com.example.trimtime.model.User
-import com.squareup.moshi.Moshi
-import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
-import java.io.File
+import com.google.firebase.database.*
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
 class SearchAppointmentActivity : AppCompatActivity() {
     lateinit var binding: ActivitySearchAppointmentBinding
+    private lateinit var database: DatabaseReference
 
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -29,6 +28,9 @@ class SearchAppointmentActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContentView(view)
+
+        // Initialize Firebase Database reference
+        database = FirebaseDatabase.getInstance().reference.child("appointments")
 
         // Set window insets listener to manage system bars
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
@@ -50,45 +52,50 @@ class SearchAppointmentActivity : AppCompatActivity() {
     }
 
     private fun populateDateSpinner() {
-        // Get the base directory for appointments
-        val baseDir = File(getExternalFilesDir(null), "Appointments")
-        // List the directories (dates) in the base directory
-        val dateDirs = baseDir.listFiles()?.filter { it.isDirectory }?.map { it.name } ?: listOf()
+        // Fetch the available dates from Firebase
+        database.addListenerForSingleValueEvent(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val dateList = mutableListOf<String>()
+                // Get all date nodes
+                snapshot.children.forEach { dateSnapshot ->
+                    dateList.add(dateSnapshot.key ?: "")
+                }
+                // Populate spinner with dates
+                val adapter = ArrayAdapter(this@SearchAppointmentActivity, android.R.layout.simple_spinner_item, dateList)
+                adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+                binding.datePicker.adapter = adapter
+            }
 
-        // Create an ArrayAdapter for the spinner
-        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, dateDirs)
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        // Set the adapter for the spinner
-        binding.datePicker.adapter = adapter
+            override fun onCancelled(error: DatabaseError) {
+                // Handle potential errors
+            }
+        })
     }
 
     @RequiresApi(Build.VERSION_CODES.O)
     private fun fetchAppointments(date: String) {
-        // Get the directory for the selected date
-        val baseDir = File(getExternalFilesDir(null), "Appointments")
-        val dateDir = File(baseDir, date)
-        // List the appointment files in the directory
-        val appointmentFiles = dateDir.listFiles { _, name -> name.endsWith(".json") } ?: arrayOf()
+        // Fetch appointments for the selected date from Firebase
+        val dateRef = database.child(date)
+        dateRef.addListenerForSingleValueEvent(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                // Clear existing rows in the table except the header
+                binding.table.removeViews(1, binding.table.childCount - 1)
 
-        // Initialize Moshi JSON adapter
-        val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
-        val jsonAdapter = moshi.adapter(User::class.java)
-
-        // Clear existing rows in the table except the header
-        binding.table.removeViews(1, binding.table.childCount - 1)
-
-        // Loop through each appointment file
-        for (file in appointmentFiles) {
-            // Read the JSON from the file
-            val json = file.readText()
-            // Parse the JSON to a User object
-            val user = jsonAdapter.fromJson(json)
-
-            // If the user is not null, add a row to the table
-            user?.let {
-                addTableRow(it)
+                // Loop through each child under the selected date
+                snapshot.children.forEach { appointmentSnapshot ->
+                    // Parse each child as a User object
+                    val user = appointmentSnapshot.getValue(User::class.java)
+                    user?.let {
+                        // Add a row for each appointment
+                        addTableRow(it)
+                    }
+                }
             }
-        }
+
+            override fun onCancelled(error: DatabaseError) {
+                // Handle potential errors
+            }
+        })
     }
 
     @RequiresApi(Build.VERSION_CODES.O)

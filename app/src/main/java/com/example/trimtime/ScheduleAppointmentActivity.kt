@@ -14,6 +14,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.example.trimtime.databinding.ActivityScheduleAppointmentBinding
 import com.example.trimtime.model.User
+import com.google.firebase.database.FirebaseDatabase
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import java.io.File
@@ -102,37 +103,25 @@ class ScheduleAppointmentActivity : AppCompatActivity() {
 
     @RequiresApi(Build.VERSION_CODES.O)
     fun register(user: User, dateTime: LocalDateTime) {
-        // Format the date
+        // Initialize Firebase Database reference
+        val database = FirebaseDatabase.getInstance()
+        val myRef = database.getReference("appointments")
+
+        // Format the date for storing
         val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
         val dateString = dateTime.format(dateFormatter)
 
-        // Define the base directory for storing appointments
-        val baseDir = File(getExternalFilesDir(null), "Appointments")
-        val dateDir = File(baseDir, dateString)
+        // Get a unique key for the appointment
+        val userKey = myRef.push().key ?: return
 
-        // Ensure the directory exists
-        if (!dateDir.exists()) {
-            val created = dateDir.mkdirs()
-            if (!created) {
-                Toast.makeText(this, "Failed to create directory: ${dateDir.absolutePath}", Toast.LENGTH_LONG).show()
-                return
+        // Save the user object to Firebase under the "appointments" node
+        myRef.child(dateString).child(userKey).setValue(user)
+            .addOnSuccessListener {
+                Toast.makeText(this, "Appointment registered successfully", Toast.LENGTH_LONG).show()
             }
-        }
-
-        // Create a JSON file for the user
-        val jsonFile = File(dateDir, "${user.id}.json")
-        val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
-        val jsonAdapter = moshi.adapter(User::class.java)
-        val json = jsonAdapter.toJson(user)
-        try {
-            // Write the JSON to the file
-            FileWriter(jsonFile).use {
-                it.write(json)
+            .addOnFailureListener { e ->
+                Toast.makeText(this, "Failed to save appointment: ${e.message}", Toast.LENGTH_LONG).show()
             }
-            Toast.makeText(this, "Appointment registered successfully", Toast.LENGTH_LONG).show()
-        } catch (e: Exception) {
-            // Handle any errors that occur during file writing
-            Toast.makeText(this, "Failed to write file: ${e.message}", Toast.LENGTH_LONG).show()
-        }
     }
+
 }
